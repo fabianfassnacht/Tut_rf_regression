@@ -38,22 +38,22 @@ The field reference data and the hyperspectral data for this tutorial are the da
 
 As first step, load all necessary R packages by executing the following code:
 
-	require(raster)
-	require(rgdal)
+	require(terra)
+	require(sf)
 	require(randomForest)
 
 R will give you a warning message in case a package is not installed yet. If this is the case, please install the packages either through the main menu of Rstudio by selecting **"Tools" =>** **"Install packages"** and then following the appearing dialogue, or by entering the corresponding R code to install the packages into the console. E.g., to install the package "raster" use the code:
 
-	install.packages("raster")	
+	install.packages("terra")	
 
 After all packages are successfully installed, load the images using two steps. First, change the path to the folder containing the image, then execute the stack command to load the image. To check whether you are in the correct folder, you can display all files of the folder using the **list.files()**-command:
 
 	setwd("D:/Remote_sensing/Tutorial_5_RandomForest")
 	list.files()
 	# to load the Sentinel-2 image
-	s2_img <- stack("s2_murnau.tif")
+	s2_img <- rast("s2_murnau.tif")
 	# to load the HyMap image
-	hym_img <- stack("murnau.hymap")
+	hym_img <- rast("murnau.hymap")
 
 We can then have a look at the two loaded images by running:
 
@@ -67,7 +67,7 @@ This will result in the following two plots:
 
 Finally, we will also add the reference dataset which is stored in a Shapefile:
 
-	vec <- readOGR(".", "murnau_fin")
+	vec <- vect("murnau_fin.shp")
 
 We can check the location of the sample plots in the field by plotting:
 
@@ -84,8 +84,8 @@ If you want, you can also re-plot the Sentinel-2 image and add the field-plot lo
 
 Next, we will first extract the spectral information of the pixels that overlap with the locations of the field sampling plots by running:
 
-	preds_s2 <- extract(s2_img, vec)
-	preds_hym <- extract(hym_img, vec)
+	preds_s2 <- extract(s2_img, vec, ID=F)
+	preds_hym <- extract(hym_img, vec, ID=F)
 
 Then, we will build the RandomForest model between the Ellenberg indicator values stored in reference dataset and the spectral information we just extracted.The first model will use the N indicator value stored in the attribute table of the Shapefile which can be accessed here:
 
@@ -97,13 +97,13 @@ To train the model for Sentinel-2 data we run:
 	
 	# use set.seed() to be able to reproduce the outputs (RandomForest contains some random components and will otherwise always lead to a slightly different results)
 	set.seed(3)
-	model_n_s2 <- randomForest(preds_s2, vec@data$MEANN, ntree = 500, mtry=sqrt(ncol(preds_s2)), na.action = omit)
+	model_n_s2 <- randomForest(preds_s2, vec$MEANN, ntree = 500, mtry=sqrt(ncol(preds_s2)), na.action = omit)
 
 As you can see, we are setting two variables to parameterize the RandomForest algorithm: **ntree**, which is the number of trees to be grown and where a default value of 500 is used and **mtry** which indicates the number of random predictor variables that are tried-out at each node-split of the decision trees (compare theoretical lecture on RandomForest heard in the course). For **mtry** we also use the recommended standard value which is the square-root of the number of predictors used to train the model.
 
 To train a similar model for the HyMap data, we run:
 
-	model_n_hym <- randomForest(preds_hym, vec@data$MEANN, ntree = 500, mtry=sqrt(ncol(preds_hym)), na.action = omit)
+	model_n_hym <- randomForest(preds_hym, vec$MEANN, ntree = 500, mtry=sqrt(ncol(preds_hym)), na.action = omit)
 
 To compare the performance of the two models, we can have a look at the out-of-bag error of RandomForest by simply calling the variable in which the model was stored:
 
@@ -127,13 +127,13 @@ Let us have a closer look at the results by producing some scatterplots between 
 For Sentinel-2, we run:
 
 	dev.off()
-	plot(model_n_s2$predicted, vec@data$MEANN)
+	plot(model_n_s2$predicted, vec$MEANN)
 	abline(0,1)
 
 Correspondingly, for HyMap we run:
 
 	dev.off()
-	plot(model_n_hym$predicted, vec@data$MEANN)
+	plot(model_n_hym$predicted, vec$MEANN)
 	abline(0,1)
 
 This leads to the following two plots:
@@ -183,19 +183,19 @@ One more important point to be considered in the predicted maps is that the vali
 Finally, we can save the output maps to raster-file by running:
 
 	# save prediction
-	writeRaster(pred_n_s2, filename = "rf_predicted_n_s2.tif", format="GTiff")
-	writeRaster(pred_n_s2_sm, filename = "rf_predicted_n_s2_sm.tif", format="GTiff")
-	writeRaster(pred_n_hym, filename = "rf_predicted_n_hym.tif", format="GTiff")
+	writeRaster(pred_n_s2, filename = "rf_predicted_n_s2.tif")
+	writeRaster(pred_n_s2_sm, filename = "rf_predicted_n_s2_sm.tif)
+	writeRaster(pred_n_hym, filename = "rf_predicted_n_hym.tif")
 
 
 ### Exercise ###
 
 To practice the just learned steps a bit more, you can try to build additional RandomForest models for the other Ellenberg indicator values available in the reference datasets. You can access for example the F values (wetness) at:
 
-	vec@data$MEANF
+	vec$MEANF
 
 And the R values (pH) at:
 
-	vec@data$MEANR
+	vec$MEANR
 
 Furthermore, you can try to examine how adding additional Sentinel-2 scenes collected at different times during the vegetation season influence the model results. To accomplish this, you will have to download some additional Sentinel-2 scenes, pre-process them using the SNAP-Toolbox and finally reproject them to the coordinate reference system indicated above. Then you can stack them into a single raster-stack and repeat the analysis. It might be good to also clip the dataset to approximately the area covered by the field-data to speed-up the data processing.
